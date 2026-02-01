@@ -1,0 +1,263 @@
+---
+title: "FA1_Group13_Quijano"
+author: "Julian Philip S. Quijano"
+date: "2026-01-28"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Libraries and Data}
+library(tidyverse)
+data <- diamonds
+data
+```
+
+# LECTURE 2
+
+```{r Lecture 2 Excersises 1}
+data %>%
+  ggplot(aes(x = carat, y = price, color = cut)) +
+  geom_point()
+```
+
+#### What relationship does it suggest between carat and cut?
+
+This plot makes it appear as though worse cuts are more expensive than better cuts.
+
+## Create a plot to directly visualize this relationship.
+
+```{r Lecture 2 Excersises 2}
+data %>%
+  ggplot(aes(x = cut, y = carat)) +
+  geom_boxplot() +
+  theme_minimal()
+```
+
+#### What do you conclude? How does this explain the paradoxical trend we found in the plot below?
+
+Lower quality cuts (Fair, Good) have, in average larger carat sizes. Meanwhile, higher quality cuts (Premium, Ideal) have smaller carat sizes in general. So we can conclude that as cut quality increases, carat size decreases. This maybe because larger diamonds are harder to cut perfectly, while smaller diamonds are likelier to have better cuts. The apparent price advantage of lower-quality cuts is explained by their larger typical carat sizes; once carat is accounted for, higher cut quality corresponds to higher prices.
+
+## Create a plot to visualize the relationship between the carat and length of a diamond. Zoom in to exclude any outliers. What sort of relationship does your plot suggest? How would you explain this relationship?
+
+```{r Lecture 2 Excersises 3}
+data %>%
+  ggplot(aes(x = carat, y = x)) +
+  geom_point() +
+  coord_cartesian(ylim = c(3,10))
+```
+
+The carat, which is weight, of the diamonds appear to have a logarithmic relationship with the length of the diamonds. To confirm this, we can change the scale of the axes with log_10 to create this:
+
+```{r Lecture 2 Excersises 4}
+data %>%
+  ggplot(aes(x = carat, y = x)) +
+  geom_point() +
+  scale_x_log10() +
+  scale_y_log10()
+```
+
+The linear relationship now confirms that, indeed, the relation between carat and length is logarithmic. This can be explained by the fact that weight is a 3-dimensional value, whilst length is 1-dimensional. So as a diamond grows, its weight grows faster exponentially relative to its length.
+
+# LECTURE 3
+
+## Exercise: Filter diamonds to those with ideal cut and at least 3 carats. How many such diamonds are there?
+
+```{r Lecture 3 Exercises 1}
+filter(data, carat <= 3 & cut %in% ('Ideal'))
+```
+
+21,547 Observations, so 21,547 diamonds.
+
+## Exercise: Select all columns except x, y, z.
+
+```{r Lecture 3 Exercises 2}
+select(data, -x, -y, -z)
+```
+
+## Exercise: Arrange diamonds in decreasing order of their length. How long is the longest diamond?
+
+```{r Lecture 3 Exercises 3}
+arrange(data, desc(x))
+
+```
+
+10.74 mm
+
+## Exercise: Add a variable called good_color that is TRUE if the color is D, E, F, G and FALSE otherwise.
+
+```{r Lecture 3 Exercises 4}
+b <- mutate(diamonds,
+       good_color = 
+         case_when(
+           color %in% c('D','E','F','G') ~ 'TRUE',
+           TRUE ~ 'FALSE'
+         ))
+
+select(b, color, good_color)
+```
+
+## Exercise: Use summarise to determine if there are any diamonds of at least one carat that cost less that \$1000.
+
+```{r Lecture 3 Exercises 5}
+summarise(data, c = sum(carat >= 1 & price < 1000))
+```
+
+There are no diamonds at least one carat that are less than \$1000
+
+## Exercise: Compute the mean price for diamonds of volume at least one carat.
+
+```{r Lecture 3 Exercises 6}
+data %>%
+  filter(carat >= 1) %>%
+  summarise(mean_price = mean(price, na.rm = TRUE))
+```
+
+## Exercise: Reproduce the output of count(diamonds, cut) via group_by() and summarise().
+
+```{r Lecture 3 Exercises 7}
+data %>%
+  group_by(cut) %>%
+  summarise(n = n()) %>%
+  ungroup()
+```
+
+## Use dplyr to answer the following questions:
+
+## What is the minimum diamond price in this dataset? See if you can find the answer in two different ways (i.e. using two different dplyr verbs).
+
+```{r Lecture 3 Exercises 8}
+summarise(data, min_price = min(price))
+
+data %>%
+  arrange(price) %>%
+  slice(1) %>%
+  select(price)
+```
+
+\$326 is the minimum diamond price.
+
+## How many diamonds have length at least one and a half times their width?
+
+```{r Lecture 3 Exercises 9}
+data %>%
+  filter(x >= (3/2)*y) %>%
+  summarise(n = n())
+```
+
+10 diamonds.
+
+## Among diamonds with colors D, E, F, G, what is the median number of carats for diamonds of each cut?
+
+```{r Lecture 3 Exercises 10}
+data %>%
+  filter(color %in% c("D", "E", "F", "G")) %>%
+  group_by(cut) %>%
+  summarise(median_cut = median(carat))
+```
+
+0.91 for Fair, 0.72 for Good, 0.70 for Very Good, 0.71 for Premium, and 0.52 for Ideal.
+
+# LECTURE 4
+
+## Import heights2.csv
+
+```{r Lecture 4 Exercises 1}
+heights_data = read_csv("heights.csv")
+heights_data
+```
+
+## Exercise: Using prose, describe how the variables and observations are organised in each of the sample tables.
+
+```{r Lecture 4 Exercises 2}
+table1
+```
+
+Table 1 has a column for each variable. It has a row for each observation as well. In this way, each cell is clearly defined and does not lead to confusion.
+
+```{r Lecture 4 Exercises 3}
+table2
+```
+
+Table 2 doubles the observations because it merges population and cases into one variable, type. A new variable, count, is used for the number corresponding to cases and population.
+
+```{r Lecture 4 Exercises 4}
+table3
+```
+
+Table 3 is even more confusing, combining cases and population into one variable, rate. This variable contains case/population, which is confusing, since it is not stated what the numbers represent, and without prior knowledge of table1 and table2, this table would not be understandable.
+
+```{r Lecture 4 Exercises 5}
+table4a
+```
+
+Table 4a removes variables type, cases, population, and year in favor of creating 2 variables 1999 and 2000, which contain the number of cases from the dataset. However, this is not explicitly stated and will lead to confusion. It also removes any mention of the population of the countries from the dataset.
+
+```{r Lecture 4 Exercises 6}
+table4b
+```
+
+Table 4b is the exact same as 4a, but instead of cases, it has population numbers under 1999 and 2000.
+
+## Exercise: Use pivot_longer() to tidy table4b in a similar fashion. What is the difference between the code used to tidy table4a and table4b?
+
+```{r Lecture 4 Exercises 7}
+pivot_longer(table4b, 
+             cols = c('1999', '2000'),
+             names_to = 'year',
+             values_to = 'population')
+```
+
+The difference is we used 'population' for values_to instead of 'cases' for this pivot.
+
+## Exercise: 
+
+## 1. Why does this code fail?
+
+table4a %\>% pivot_longer(cols = c(1999, 2000), names_to = "year", values_to = "cases")
+
+It uses 1999 and 2000 and the program treats these as int, what should be used instead is "1999" and "2000".
+
+## 2. Tidy the simple tibble below. Do you need to make it wider or longer? What are the variables?
+
+```{r Lecture 4 Exercises 8}
+exc2 <- tribble(
+  ~pregnant, ~male, ~female,
+  "yes", NA, 10,
+  "no", 20, 12
+)
+```
+
+We need to use pivot_longer since the variables male and female can just be values of a single variable: gender.
+
+```{r Lecture 4 Exercises 9}
+exc2 %>%
+  pivot_longer(
+    cols = c(male, female), 
+    names_to = 'gender',
+    values_to = 'count')
+```
+
+## Exercise: Consider the two tibbles below. What is the key column? Without writing any code, can you predict how many rows and columns left_join(x,y) and left_join(y,x) will have?
+
+```{r Lecture 4 Exercises 10}
+x <- tribble(
+~state, ~population,
+"PA", 12.8,
+"TX", 28.6,
+"NY", 19.5
+)
+y <- tribble(
+~state, ~capital,
+"TX", "Austin",
+"CA", "Sacramento",
+"NY", "New York City",
+"MI", "Lansing"
+)
+```
+
+The key column is 'state'. left_join(x, y) would have 3 rows and 3 columns, while left_join(y, x) would have 4 rows and 3 columns.
+
+Github Link: <https://github.com/SylTana/DSC1107---Data-Mining-and-Wrangling/tree/main/FA1>
