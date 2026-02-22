@@ -1,0 +1,256 @@
+---
+title: "FA3_Group3_Quijano_DSC1107"
+author: "Julian Philip S. Quijano"
+date: "2026-02-22"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+```
+
+```{r Part 1 – Data Wrangling and Validation (6 points)}
+# 1.1
+load("ml_pay.rdata")
+mlb_raw <- ml_pay
+
+dim(mlb_raw) 
+str(mlb_raw) 
+
+# 1.2
+mlb_aggregate <- mlb_raw %>%
+  transmute(
+    team = Team.name.2014,
+    payroll_aggregate = rowMeans(select(., starts_with("p")), na.rm = TRUE),
+    pct_wins_aggregate = rowMeans(select(., ends_with(".pct")), na.rm = TRUE)
+  )
+
+dim(mlb_aggregate)
+head(mlb_aggregate)
+
+# Payroll
+payroll_long <- mlb_raw %>%
+  select(Team.name.2014, starts_with("p19"), starts_with("p20")) %>%
+  pivot_longer(
+    cols = -Team.name.2014,
+    names_to = "year",
+    values_to = "payroll"
+  ) %>%
+  mutate(year = as.numeric(sub("p", "", year)))
+
+# Wins
+wins_long <- mlb_raw %>%
+  select(Team.name.2014, starts_with("X19"), starts_with("X20")) %>%
+  select(-ends_with(".pct")) %>%
+  pivot_longer(
+    cols = -Team.name.2014,
+    names_to = "year",
+    values_to = "num_wins"
+  ) %>%
+  mutate(year = as.numeric(sub("X", "", year)))
+
+# Win Percentage
+pct_long <- mlb_raw %>%
+  select(Team.name.2014, ends_with(".pct")) %>%
+  pivot_longer(
+    cols = -Team.name.2014,
+    names_to = "year",
+    values_to = "pct_wins"
+  ) %>%
+  mutate(year = as.numeric(sub("\\.pct", "", sub("X", "", year))))
+
+# Merge 
+mlb_yearly <- payroll_long %>%
+  rename(team = Team.name.2014) %>%
+  left_join(wins_long %>%
+              rename(team = Team.name.2014),
+            by = c("team", "year")) %>%
+  left_join(pct_long %>%
+              rename(team = Team.name.2014),
+            by = c("team", "year"))
+
+dim(mlb_yearly)
+head(mlb_yearly)
+```
+
+Dataset contains 30 rows, 54 columns The dataset is a data frame containing numeric variables, integer variables, and one factor variable which identifies team name. mlb_yearly contains one observation per team per year. Since there are 30 teams and 17 seasons (1998–2014), it should contain 30 × 17 = 510 rows.
+
+```{r Part 2 – Aggregate Consistency Check}
+computed_aggregate <- mlb_yearly %>%
+  group_by(team) %>%
+  summarise(
+    payroll_computed = mean(payroll, na.rm = TRUE),
+    pct_wins_computed = mean(pct_wins, na.rm = TRUE)
+  )
+
+comparison <- computed_aggregate %>%
+  left_join(mlb_aggregate, by = "team")
+
+# Check differences
+comparison <- comparison %>%
+  mutate(
+    payroll_diff = payroll_computed - payroll_aggregate,
+    pct_diff = pct_wins_computed - pct_wins_aggregate
+  )
+
+summary(comparison$payroll_diff)
+summary(comparison$pct_diff)
+
+ggplot(comparison, aes(x = payroll_aggregate, y = payroll_computed)) +
+  geom_point() +
+  geom_abline(slope = 1, intercept = 0, color = "red") +
+  labs(
+    x = "Provided Payroll Aggregate",
+    y = "Computed Payroll Aggregate",
+    title = "Computed vs Provided Payroll Aggregates"
+  ) +
+  theme_minimal()
+
+ggplot(comparison, aes(x = pct_wins_aggregate, y = pct_wins_computed)) +
+  geom_point() +
+  geom_abline(slope = 1, intercept = 0, color = "red") +
+  labs(
+    x = "Provided Win % Aggregate",
+    y = "Computed Win % Aggregate",
+    title = "Computed vs Provided Win Percentage Aggregates"
+  ) +
+  theme_minimal()
+```
+
+For payroll, the computed aggregates are slightly higher than the provided values (differences of 2–9), likely due to rounding or minor calculation differences. Overall, the datasets are consistent.
+
+Differences are negligible and likely due to rounding. The scatter plots show points lying almost perfectly on the 45° line, confirming consistency.
+
+```{r Part 3 – Exploratory Data Analysis}
+ggplot(mlb_yearly, aes(x = year, y = payroll)) +
+  geom_line() +
+  facet_wrap(~ team, ncol = 5) +
+  labs(
+    title = "MLB Team Payroll Trends (1998–2014)",
+    x = "Year",
+    y = "Payroll (millions)"
+  ) +
+  theme_minimal()
+
+ggplot(mlb_yearly, aes(x = year, y = pct_wins)) +
+  geom_line() +
+  facet_wrap(~ team, ncol = 5) +
+  labs(
+    title = "MLB Team Win Percentage Trends (1998–2014)",
+    x = "Year",
+    y = "Winning Percentage"
+  ) +
+  theme_minimal()
+
+mlb_aggregate %>%
+  arrange(desc(payroll_aggregate)) %>%
+  slice(1:3) %>%
+  select(team, payroll_aggregate)
+
+mlb_aggregate %>%
+  arrange(desc(pct_wins_aggregate)) %>%
+  slice(1:3) %>%
+  select(team, pct_wins_aggregate)
+
+cor_test <- cor.test(
+  mlb_aggregate$payroll_aggregate,
+  mlb_aggregate$pct_wins_aggregate
+)
+
+cor_test$estimate   
+cor_test$p.value
+```
+
+Payrolls vary widely across teams, with some consistently spending more over the 1998–2014 period. Win percentages fluctuate year-to-year, but some teams maintain higher performance over time.
+
+The top 3 payroll teams are the Yankees, Dodgers, and Red Sox.
+
+However the top 3 teams with the highest percent wins are the Yankees, Braves, and Red Sox.
+
+While it is indicated that there is a general positive relationship with pay and winning, it is not a guarantee.
+
+There is a strong positive relationship between aggregate payroll and aggregate win percentage. Teams with higher payrolls generally achieve higher winning percentages. The correlation is statistically significant, indicating that this relationship is unlikely to be due to chance. While payroll explains a large portion of performance variation, other factors may still influence team success.
+
+```{r Part 4 – Regression Modeling}
+lm_model <- lm(pct_wins_aggregate ~ payroll_aggregate, data = mlb_aggregate)
+summary(lm_model)
+
+# Estimated slope
+coef(lm_model)["payroll_aggregate"]
+
+# p-value for slope
+summary(lm_model)$coefficients["payroll_aggregate", "Pr(>|t|)"]
+
+# R-squared
+summary(lm_model)$r.squared
+
+# 95% Confidence interval for slope
+confint(lm_model, "payroll_aggregate", level = 0.95)
+
+# Base R diagnostic plots
+par(mfrow = c(2, 2))
+plot(lm_model)
+
+n <- nrow(mlb_aggregate)
+cooksd <- cooks.distance(lm_model)
+influential <- which(cooksd > 4/n)
+
+mlb_aggregate$team[influential]
+cooksd[influential]
+
+lm_model2 <- lm(
+  pct_wins_aggregate ~ payroll_aggregate,
+  data = mlb_aggregate[-influential[1], ]
+)
+
+summary(lm_model2)$coefficients
+summary(lm_model2)$r.squared
+```
+
+For every additional \$1 million in payroll, the team’s aggregate winning percentage increases by 0.0011, or roughly 0.11%. For example, a \$10 million increase in payroll corresponds to a 1.1 percentage point increase in winning percentage.
+
+Residuals vs Fitted: Residuals scattered randomly around 0 → linearity assumption reasonable.
+
+Normal Q-Q plot: Residuals lie close to the 45° line → residuals approximately normal.
+
+Scale-Location plot: Residual spread roughly constant across fitted values → homoscedasticity reasonable.
+
+Cook’s Distance: Oakland Athletics has high Cook’s D (0.258) → potentially influential.
+
+Removing Oakland slightly increases the slope and R\^2. This indicates the model is moderately sensitive to influential points, but the positive relationship between payroll and winning percentage remains strong. Overall, the model is stable, and conclusions about payroll impact are robust.
+
+```{r Part 5 – Model Extension and Critical Thinking }
+lm_log <- lm(pct_wins_aggregate ~ log(payroll_aggregate), data = mlb_aggregate)
+summary(lm_log)
+
+# Original model
+summary(lm_model)$r.squared
+
+# Log-transformed model
+summary(lm_log)$r.squared
+
+# Diagnostic plots
+par(mfrow = c(2,2))
+plot(lm_log)
+
+mlb_aggregate <- mlb_aggregate %>%
+  mutate(efficiency = pct_wins_aggregate / payroll_aggregate)
+
+# Top 3 most efficient teams
+top_efficiency <- mlb_aggregate %>%
+  arrange(desc(efficiency)) %>%
+  slice(1:3) %>%
+  select(team, pct_wins_aggregate, payroll_aggregate, efficiency)
+
+top_efficiency
+```
+
+The diagnostic plots for the log-transformed model indicate a good fit to the linear regression assumptions. The Residuals vs Fitted plot shows residuals scattered evenly around zero with no clear pattern, supporting linearity. The Q-Q plot demonstrates that residuals are approximately normally distributed, with most points closely following the reference line. The Scale-Location plot reveals a fairly constant spread of residuals across fitted values, suggesting homoscedasticity is satisfied. Finally, the Residuals vs Leverage plot identifies no extreme influential points, indicating no observations unduly impact the model. Overall, these diagnostics suggest the log transformation improved model assumptions and fit compared to the original model.
+
+The most efficient teams achieve high win percentages relative to low payroll. These teams may outperform expectations compared to regression predictions based solely on payroll. This aligns with the Moneyball concept, which emphasizes maximizing performance per dollar spent rather than simply having the highest payroll. Efficiency highlights teams that get more “bang for the buck,” which is not always captured by payroll alone.
+
+Github Link: <https://github.com/SylTana/DSC1107---Data-Mining-and-Wrangling/tree/main/FA3>
