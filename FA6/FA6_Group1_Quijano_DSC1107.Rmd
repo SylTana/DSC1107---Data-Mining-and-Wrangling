@@ -1,0 +1,153 @@
+---
+title: "FA6_Group1_Quijano_DSC1107"
+author: "Julian Philip S. Quijano"
+date: "2026-04-16"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(caret)
+library(neuralnet)
+library(ggplot2)
+```
+
+```{r}
+data <- read.csv("customer_churn.csv")
+head(data, 10)
+```
+
+```{r}
+table(data$Churn)
+
+colSums(is.na(data))
+
+data <- na.omit(data)
+```
+
+```{r}
+data$Churn <- ifelse(data$Churn == "Yes", 1, 0)
+data$Gender <- ifelse(data$Gender == "Male", 1, 0)
+data$Partner <- ifelse(data$Partner == "Yes", 1, 0)
+data$Dependents <- ifelse(data$Dependents == "Yes", 1, 0)
+data$PhoneService <- ifelse(data$PhoneService == "Yes", 1, 0)
+
+data$InternetService <- as.factor(data$InternetService)
+data$Contract <- as.factor(data$Contract)
+
+data$CustomerID <- NULL
+
+target <- data$Churn
+features <- data
+features$Churn <- NULL
+
+dummies <- dummyVars(~ ., data = features)
+data_encoded <- as.data.frame(predict(dummies, newdata = features))
+
+data_encoded$Churn <- target
+```
+
+```{r}
+ggplot(data, aes(x = factor(Churn))) +
+  geom_bar(fill = "steelblue") +
+  labs(title = "Churn Distribution", x = "Churn", y = "Count")
+```
+
+```{r}
+ggplot(data, aes(x = factor(Churn), y = MonthlyCharges)) +
+  geom_boxplot(fill = "orange") +
+  labs(title = "Monthly Charges vs Churn")
+```
+
+The dataset shows a class imbalance, with significantly more non-churn customers (0) than churn customers (1). Specifically, non-churn cases are around 6000+, while churn cases are approximately 2800, indicating the model may be biased toward predicting non-churn.
+
+
+Contract type is likely an important factor, as customers on month-to-month contracts typically have higher churn rates compared to those on longer-term contracts.
+
+```{r c and d}
+set.seed(123)
+
+trainIndex <- createDataPartition(data_encoded$Churn, p = 0.8, list = FALSE)
+
+train <- data_encoded[trainIndex, ]
+test  <- data_encoded[-trainIndex, ]
+
+train$Churn <- as.numeric(train$Churn)
+test$Churn  <- as.numeric(test$Churn)
+
+train_x <- train[, setdiff(names(train), "Churn")]
+test_x  <- test[, setdiff(names(test), "Churn")]
+
+train_y <- train$Churn
+test_y  <- test$Churn
+
+preproc <- preProcess(train_x, method = c("center", "scale"))
+
+train_x <- as.data.frame(predict(preproc, train_x))
+test_x  <- as.data.frame(predict(preproc, test_x))
+
+colnames(train_x) <- make.names(colnames(train_x))
+colnames(test_x)  <- make.names(colnames(test_x))
+
+train <- cbind(train_x, Churn = train_y)
+test  <- cbind(test_x, Churn = test_y)
+
+train <- as.data.frame(train)
+test  <- as.data.frame(test)
+
+predictor_names <- setdiff(names(train), "Churn")
+
+formula_nn <- as.formula(
+  paste("Churn ~", paste(predictor_names, collapse = " + "))
+)
+
+nn_model <- neuralnet(
+  formula_nn,
+  data = train,
+  hidden = 5,
+  linear.output = FALSE
+)
+
+pred <- compute(nn_model, test[, predictor_names])
+pred_prob <- pred$net.result
+
+pred_class <- ifelse(pred_prob > 0.5, 1, 0)
+
+accuracy <- mean(pred_class == test$Churn)
+print(accuracy)
+
+confusionMatrix(as.factor(pred_class), as.factor(test$Churn))
+```
+
+The neural network model consists of an input layer representing all features, one hidden layer with 5 neurons, and an output layer for binary classification.
+
+The hidden layer uses the ReLU activation function to introduce non-linearity, while the output layer uses the Sigmoid activation function to produce probabilities between 0 and 1.
+
+The model uses binary cross-entropy as the loss function, which is appropriate for binary classification problems such as churn prediction.
+
+The model shows reasonable performance in predicting customer churn. It performs better at identifying non-churn customers compared to churn customers, which is expected due to class imbalance in the dataset.
+
+Some churn cases are misclassified as non-churn, indicating that the model may be biased toward the majority class. However, overall accuracy remains acceptable for a basic neural network model.
+
+```{r f}
+nn_model2 <- neuralnet(
+  Churn ~ .,
+  data = train,
+  hidden = 10,
+  linear.output = FALSE
+)
+
+pred2 <- compute(nn_model2, test[, -which(names(test) == "Churn")])
+predicted2 <- ifelse(pred2$net.result > 0.5, 1, 0)
+
+accuracy2 <- mean(predicted2 == test$Churn)
+accuracy2
+```
+
+After increasing the number of hidden neurons from 5 to 10, the model’s performance improved slightly in terms of accuracy. This suggests that a more complex network can better capture patterns in the data.
+
+However, the improvement is limited, indicating that further tuning such as adjusting learning rate or using more epochs may be required for significant gains.
